@@ -108,7 +108,7 @@ app.post('/instances', async (req, res) => {
 
     const record = {
       id: info.Id,
-      name: info.Name,
+      name: info.Name.replace(/^\//, ''), // remove leading slash from docker container name
       image: info.Config.Image,
       state: info.State.Status,
       created: info.Created,
@@ -121,6 +121,91 @@ app.post('/instances', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// DELETE /instances → delete all instances in the registry
+app.delete('/instances', async (req, res) => {
+  try {
+    const instances = registry.read();
+
+    for (const instance of instances) {
+      const id = instance.id;
+
+      if (!id) {
+        continue;
+      }
+
+      try {
+        const container = docker.getContainer(id);
+        const info = await container.inspect();
+
+        if (info.State.Running) {
+          await container.stop();
+        }
+
+        await container.remove();
+        console.log(`deleted container ${id}`);
+      } catch (dockerError) {
+        if (dockerError.statusCode === 404) {
+          console.log(`container ${id} not found in Docker, removing from registry`);
+        } else {
+          console.error(
+            `error removing container ${id}:`,
+            dockerError.message
+          );
+        }
+      }
+    }
+
+    // Clear the registry after attempting to remove all containers
+    registry.write([]);
+
+    res.status(200).json({
+      message: 'all instances deleted (registry cleared)',
+      deletedCount: instances.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /instances/:id → stop and remove a container
+app.delete('/instances/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const instances = registry.read();
+        const instance = instances.find(i => i.id === id || i.name === id);
+
+        if (!instance) {
+            return res.status(404).json({ error: 'instance not found' });
+        }
+
+        try {
+            const container = docker.getContainer(id);
+            const info = await container.inspect();
+            
+            // stop the container if it's running
+            if (info.State.Running) {
+                await container.stop();
+            }
+            
+            // remove the container
+            await container.remove();
+        } catch (dockerError) {
+            // only handle "not found" errors - re-throw all others
+            if (dockerError.statusCode === 404) {
+                console.log(`container ${id} not found in Docker, removing from registry`);
+            } else {
+                throw dockerError;
+            }
+        }
+        // remove from registry regardless
+        registry.removeInstance(id);
+
+        res.status(200).json({ message: 'instance deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.listen(port, () => {
