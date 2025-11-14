@@ -67,6 +67,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// GET /instances → list running containers
+app.get('/instances', async (req, res) => {
+  try {
+    let instances = registry.read();
+
+    res.json({ instances, count: instances.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /instances → start a new web-instance container
 app.post('/instances', async (req, res) => {
   try {
