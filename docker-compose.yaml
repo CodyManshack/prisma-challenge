@@ -14,6 +14,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock # host docker API access
       - rproxy_config:/app/rproxy # shared rproxy configs
       - ./web-server:/app/web-server:ro # web-server for creating new instances
+      - controller_data:/app/data # persistent data storage
   rproxy:
     build:
       context: rproxy
@@ -28,3 +29,4 @@ services:
 
 volumes:
   rproxy_config:
+  controller_data:

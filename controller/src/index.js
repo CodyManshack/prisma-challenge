@@ -8,6 +8,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 const webServerPath = path.resolve(__dirname, 'web-server');
 const webServerImage = 'web-server:latest';
+const webServerBasePort = 3000;
 
 // ** Begin AI Generated Code **
 // mostly AI Generated (I have not worked with dockerode before) and edited afterwards
@@ -48,6 +49,18 @@ const webServerImage = 'web-server:latest';
 })();
 // ** End AI Generated Code **
 
+// load container registry on startup
+const registry = require('./registry');
+(async () => {
+    try {
+        await registry.read();
+        console.log('container registry loaded successfully');
+    } catch (error) {
+        console.error('failed to load container registry:', error.message);
+        process.exit(1);
+    }
+})();
+
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -59,29 +72,41 @@ app.post('/instances', async (req, res) => {
   try {
     const { image = webServerImage, name, env = [] } = req.body;
 
+    // determine next port in a simple round-robin style starting from BASE_PORT
+    const instances = registry.read();
+    const lastPort = instances.length
+      ? Math.max(...instances.map(i => i.port || webServerBasePort))
+      : webServerBasePort;
+    const hostPort = lastPort + 1;
+
     const container = await docker.createContainer({
       Image: image,
-      name: name || undefined,
+      name: name ? name : undefined,
       Env: env,
       HostConfig: {
         PublishAllPorts: false,
         PortBindings: {
-            "80/tcp": [{ HostPort: "3001" }]
+            "80/tcp": [{ HostPort: hostPort.toString() }]
         },
-        RestartPolicy: { Name: 'unless-stopped' }
+        RestartPolicy: { Name: 'no' }
       }
     });
 
     await container.start();
     const info = await container.inspect();
 
-    res.status(201).json({
+    const record = {
       id: info.Id,
-      name: info.Name.replace(/^\//, ''),
+      name: info.Name,
       image: info.Config.Image,
       state: info.State.Status,
-      created: info.Created
-    });
+      created: info.Created,
+      port: hostPort,
+    };
+
+    registry.addInstance(record);
+
+    res.status(201).json(record);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
