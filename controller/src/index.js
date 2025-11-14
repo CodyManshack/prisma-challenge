@@ -6,6 +6,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
+const webServerPath = path.resolve(__dirname, 'web-server');
 const webServerImage = 'web-server:latest';
 
 // ** Begin AI Generated Code **
@@ -13,16 +14,24 @@ const webServerImage = 'web-server:latest';
 // build the web-server image on startup
 (async () => {
     try {
-        console.log('building web-server image...');
+        console.log('building web-server image...');        
         const stream = await docker.buildImage({
-            context: path.resolve(__dirname, '../../web-server'),
-            src: ['Dockerfile']
+            context: webServerPath,
+            src: ['Dockerfile', 'index.html', 'nginx.conf']
         }, {
             t: webServerImage
         });
 
+        // follow build progress and log output
         await new Promise((resolve, reject) => {
-            docker.modem.followProgress(stream, (err, res) => err ? reject(err) : resolve(res));
+            docker.modem.followProgress(stream, 
+                (err, res) => err ? reject(err) : resolve(res),
+                (event) => {
+                    if (event.stream) {
+                        process.stdout.write(event.stream);
+                    }
+                }
+            );
         });
 
         console.log('web-server image built successfully');

@@ -10,10 +10,10 @@ services:
     environment:
       NODE_ENV: development
     volumes:
-      - .:/app
       - /app/node_modules
       - /var/run/docker.sock:/var/run/docker.sock # host docker API access
       - rproxy_config:/app/rproxy # shared rproxy configs
+      - ./web-server:/app/web-server:ro # web-server for creating new instances
   rproxy:
     build:
       context: rproxy
