@@ -1,0 +1,14 @@
+{
+  "name": "controller",
+  "version": "1.0.0",
+  "description": "Control API for dynamic nginx config",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
