@@ -19,7 +19,7 @@ services:
       context: rproxy
       dockerfile: Dockerfile
     container_name: rproxy
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
