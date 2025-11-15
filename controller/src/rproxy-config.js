@@ -28,8 +28,8 @@ const getLocationConf = ({ name }) => {
     const safeName = name.replace(/[^a-zA-Z0-9_-]/g, "_");
 
     return `
-location /instances/${safeName}/ {
-    rewrite ^/instances/${safeName}/(.*)$ /$1 break;
+location /apps/${safeName}/ {
+    rewrite ^/apps/${safeName}/(.*)$ /$1 break;
     proxy_pass http://instance_${safeName};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
