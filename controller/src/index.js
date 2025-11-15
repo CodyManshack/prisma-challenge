@@ -5,6 +5,7 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const rProxyConfig = require('./rproxy-config');
 
 const webServerPath = path.resolve(__dirname, 'web-server');
 const webServerImage = 'web-server:latest';
@@ -117,13 +118,37 @@ app.post('/instances', async (req, res) => {
 
     registry.addInstance(record);
 
+    await rProxyConfig.writeInstanceConfigAndReload(docker, record);
+
     res.status(201).json(record);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+async function stopAndRemoveContainerIfExists(id) {
+  const container = docker.getContainer(id);
+
+  try {
+    const info = await container.inspect();
+
+    if (info.State.Running) {
+      await container.stop();
+    }
+
+    return await container.remove();
+  } catch (err) {
+    if (err.statusCode === 404) {
+      console.log(`container ${id} not found in Docker, skipping removal`);
+      return { removed: false, notFound: true };
+    }
+
+    throw err;
+  }
+}
+
 // DELETE /instances → delete all instances in the registry
+// I don't like nested try catch blocks, but I'll leave this for now
 app.delete('/instances', async (req, res) => {
   try {
     const instances = registry.read();
@@ -136,28 +161,14 @@ app.delete('/instances', async (req, res) => {
       }
 
       try {
-        const container = docker.getContainer(id);
-        const info = await container.inspect();
-
-        if (info.State.Running) {
-          await container.stop();
-        }
-
-        await container.remove();
-        console.log(`deleted container ${id}`);
-      } catch (dockerError) {
-        if (dockerError.statusCode === 404) {
-          console.log(`container ${id} not found in Docker, removing from registry`);
-        } else {
-          console.error(
-            `error removing container ${id}:`,
-            dockerError.message
-          );
-        }
+        await stopAndRemoveContainerIfExists(instance.id);
+        await rProxyConfig.deleteInstanceConfigAndReload(docker, instance);
+      } catch (err) {
+        console.error(`error cleaning up instance ${instance.id}:`, err.message);
       }
     }
 
-    // Clear the registry after attempting to remove all containers
+    // clear the registry after attempting to remove all containers
     registry.write([]);
 
     res.status(200).json({
@@ -174,36 +185,22 @@ app.delete('/instances/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const instances = registry.read();
-        const instance = instances.find(i => i.id === id || i.name === id);
+        const instance = instances.find(i => i.id === id);
 
         if (!instance) {
             return res.status(404).json({ error: 'instance not found' });
         }
 
-        try {
-            const container = docker.getContainer(id);
-            const info = await container.inspect();
-            
-            // stop the container if it's running
-            if (info.State.Running) {
-                await container.stop();
-            }
-            
-            // remove the container
-            await container.remove();
-        } catch (dockerError) {
-            // only handle "not found" errors - re-throw all others
-            if (dockerError.statusCode === 404) {
-                console.log(`container ${id} not found in Docker, removing from registry`);
-            } else {
-                throw dockerError;
-            }
-        }
+        await stopAndRemoveContainerIfExists(id);
+
+        await rProxyConfig.deleteInstanceConfigAndReload(docker, instance);
+
         // remove from registry regardless
         registry.removeInstance(id);
 
         res.status(200).json({ message: 'instance deleted successfully' });
     } catch (error) {
+        console.error('error deleting instance:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
