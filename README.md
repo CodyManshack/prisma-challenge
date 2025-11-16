@@ -34,6 +34,7 @@ update the docker socket in the `docker-compose.yaml` file for the `controller` 
   - Linux: `/var/run/docker.sock:/var/run/docker.sock`  
   - Windows: `//./pipe/docker_engine`  
   - Windows (WSL): `/var/run/docker.sock`  
+    > The basic Linux version worked fine for me on Windows (WSL) - try that first.
 
 # API Endpoints
 > Endpoint Docs AI Generated  
