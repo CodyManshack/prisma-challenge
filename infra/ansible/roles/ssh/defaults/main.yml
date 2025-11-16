@@ -1,0 +1,4 @@
+---
+ssh_user: "{{ ssh_user_id }}"
+# list of public SSH keys (strings) to authorize for the user
+ssh_authorized_keys: []

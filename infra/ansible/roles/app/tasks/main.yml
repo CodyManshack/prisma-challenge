@@ -1,0 +1,19 @@
+---
+- name: Ensure application directory exists
+  file:
+    path: /opt/prisma-challenge
+    state: directory
+    mode: '0755'
+
+- name: Copy repository contents to host
+  synchronize:
+    src: "{{ playbook_dir }}/../.."
+    dest: /opt/prisma-challenge
+    recursive: yes
+    delete: no
+
+- name: Bring up Docker Compose stack
+  shell: |
+    docker compose up -d --build
+  args:
+    chdir: /opt/prisma-challenge

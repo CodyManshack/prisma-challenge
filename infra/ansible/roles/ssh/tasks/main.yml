@@ -1,0 +1,43 @@
+---
+- name: Ensure OpenSSH server is installed
+  apt:
+    name: openssh-server
+    state: present
+    update_cache: yes
+
+- name: Configure ssh to listen on port 2999
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^Port\s+'
+    line: "Port 2999"
+    state: present
+    create: no
+    backup: yes
+  notify: Reload ssh
+
+- name: Ensure authorized_keys are present for {{ ssh_user }}
+  authorized_key:
+    user: "{{ ssh_user }}"
+    key: "{{ item }}"
+    manage_dir: yes
+    state: present
+  loop: "{{ ssh_authorized_keys }}"
+  when: ssh_authorized_keys | length > 0
+
+- name: Disable ssh root login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*PermitRootLogin\s+'
+    line: 'PermitRootLogin no'
+    state: present
+    backup: yes
+  notify: Reload ssh
+
+- name: Disable ssh password authentication (keys only)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*PasswordAuthentication\s+'
+    line: 'PasswordAuthentication no'
+    state: present
+    backup: yes
+  notify: Reload ssh
